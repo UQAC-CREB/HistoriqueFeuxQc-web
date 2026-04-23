@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Feux de forêt au Québec — 1900 à 2023</title>
+
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --rouge:        #8B0000;
+      --accent:       #c0392b;
+      --bleu:         #2C3E50;
+      --dark:         #383d44;
+      --panel-bg:     #2d3238;
+      --panel-border: #454c56;
+      --text-main:    #e8e8e8;
+      --text-muted:   #a0aab8;
+    }
+
+    html, body { height: 100%; font-family: 'Source Sans 3', sans-serif; background: var(--dark); color: var(--text-main); overflow: hidden; }
+
+    #header {
+      height: 56px; background: var(--bleu);
+      display: flex; align-items: center;
+      padding: 0 20px; gap: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+      position: relative; z-index: 10;
+    }
+    #header .icon { font-size: 22px; flex-shrink: 0; }
+    #header h1 {
+      font-family: 'Oswald', sans-serif; font-size: 13.5px; font-weight: 600;
+      letter-spacing: 1.3px; text-transform: uppercase; color: #fff; line-height: 1.25;
+    }
+
+    #app { display: flex; height: calc(100vh - 56px); }
+
+    #panel {
+      width: 680px; min-width: 680px; background: var(--panel-bg);
+      border-right: 1px solid var(--panel-border);
+      display: flex; flex-direction: column;
+      overflow-y: auto; padding: 16px 14px; gap: 14px;
+    }
+    .panel-section { display: flex; flex-direction: column; gap: 7px; }
+    .panel-label {
+      font-family: 'Oswald', sans-serif; font-size: 11px;
+      letter-spacing: 1.8px; text-transform: uppercase; color: var(--text-muted);
+    }
+
+    /* Slider période */
+    .periode-wrap { display: flex; flex-direction: column; gap: 8px; }
+    .periode-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); }
+    input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; height: 4px; }
+    .periode-current {
+      font-family: 'Oswald', sans-serif; font-size: 20px;
+      color: var(--accent); text-align: center; letter-spacing: 2px;
+    }
+
+    #btn-play {
+      background: var(--accent); border: none; border-radius: 6px;
+      color: #fff; font-family: 'Oswald', sans-serif;
+      font-size: 13px; letter-spacing: 1px;
+      padding: 7px 16px; cursor: pointer; transition: background 0.2s; width: 100%;
+    }
+    #btn-play:hover { background: #a93226; }
+
+    .divider { border: none; border-top: 1px solid var(--panel-border); }
+
+    /* Charts */
+    .chart-box {
+      background: #353b43; border: 1px solid var(--panel-border);
+      border-radius: 8px; padding: 12px;
+    }
+    .chart-title {
+      font-family: 'Oswald', sans-serif; font-size: 12px;
+      letter-spacing: 1.2px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 8px; text-align: center;
+    }
+
+    /* Map */
+    #map { flex: 1; position: relative; }
+    #map-container { width: 100%; height: 100%; }
+
+    #basemap-switch {
+      position: absolute; top: 10px; right: 10px; z-index: 5;
+      display: flex; background: rgba(30,34,40,0.93);
+      border: 1px solid var(--panel-border); border-radius: 6px;
+      overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    }
+    .bm-btn {
+      padding: 6px 13px; font-family: 'Source Sans 3', sans-serif;
+      font-size: 12px; color: var(--text-muted); cursor: pointer;
+      border: none; background: transparent;
+      border-right: 1px solid var(--panel-border);
+      transition: background 0.15s, color 0.15s; white-space: nowrap;
+    }
+    .bm-btn:last-child { border-right: none; }
+    .bm-btn.active { background: var(--bleu); color: #fff; }
+    .bm-btn:hover:not(.active) { background: rgba(255,255,255,0.07); color: var(--text-main); }
+
+    #loading {
+      position: absolute; inset: 0; background: #383d44;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px; z-index: 100; transition: opacity 0.5s;
+    }
+    #loading.hidden { opacity: 0; pointer-events: none; }
+    #loading-msg { font-family: 'Oswald', sans-serif; letter-spacing: 2px; font-size: 13px; color: var(--text-muted); text-transform: uppercase; }
+    .spinner {
+      width: 40px; height: 40px; border: 3px solid var(--panel-border);
+      border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #panel::-webkit-scrollbar { width: 5px; }
+    #panel::-webkit-scrollbar-track { background: transparent; }
+    #panel::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p id="loading-msg">Chargement des données…</p>
+</div>
+
+<div id="header">
+  <span class="icon">🔥</span>
+  <h1>Feux de forêt au Québec de 1900 à 2023</h1>
+</div>
+
+<div id="app">
+  <div id="panel">
+
+    <div class="panel-section">
+      <span class="panel-label">Période</span>
+      <div class="periode-wrap">
+        <div class="periode-current" id="periode-display">1900-1909</div>
+        <input type="range" id="slider-periode" min="0" max="12" value="0" step="1" />
+        <div class="periode-labels">
+          <span>1900</span><span>1910</span><span>1920</span><span>1930</span><span>1940</span>
+          <span>1950</span><span>1960</span><span>1970</span><span>1980</span><span>1990</span>
+          <span>2000</span><span>2010</span><span>2020</span>
+        </div>
+        <button id="btn-play">▶ Animer</button>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <div class="panel-section">
+      <span class="panel-label">Superficie brûlée (M ha) — Saguenay–Lac-Saint-Jean</span>
+      <div class="chart-box">
+        <canvas id="chartSag" height="160"></canvas>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <span class="panel-label">Superficie brûlée (M ha) — Province du Québec</span>
+      <div class="chart-box">
+        <canvas id="chartQc" height="160"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="map">
+    <div id="map-container"></div>
+    <div id="basemap-switch">
+      <button class="bm-btn active" data-bm="neutre">Neutre</button>
+      <button class="bm-btn"        data-bm="satellite">Satellite</button>
+      <button class="bm-btn"        data-bm="sombre">Sombre</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PERIODES = ['1900-1909','1910-1919','1920-1929','1930-1939','1940-1949','1950-1959',
+                  '1960-1969','1970-1979','1980-1989','1990-1999','2000-2009','2010-2019','2020-2029'];
+const BOUNDS = [[-79.5, 44.5], [-56.5, 63]];
+
+function cartoBrightStyle() {
+  return 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+}
+function googleSatStyle() {
+  return {
+    version: 8,
+    glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+    sources: { 'gsat': { type:'raster', tiles:[
+      'https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+      'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+      'https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+      'https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    ], tileSize:256, attribution:'© Google' }},
+    layers: [{ id:'gsat-layer', type:'raster', source:'gsat', paint:{ 'raster-opacity': 0.75 } }]
+  };
+}
+const STYLE_URLS = {
+  neutre:    cartoBrightStyle(),
+  satellite: googleSatStyle(),
+  sombre:    'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+};
+
+let map, chartSag, chartQc;
+let currentPeriode = '1900-1909';
+let currentBm      = 'neutre';
+let playTimer      = null;
+let aggrData       = [];
+let geojsonProv    = null;
+const geoCache     = {};
+
+function fmtNum(n) {
+  if (!n && n !== 0) return '—';
+  return new Intl.NumberFormat('fr-CA', { maximumFractionDigits: 3 }).format(n / 1e6);
+}
+function setLoadingMsg(msg) { document.getElementById('loading-msg').textContent = msg; }
+
+// ── Charts ──
+function makeChartConfig(region) {
+  return {
+    type: 'bar',
+    data: {
+      labels: PERIODES,
+      datasets: [{
+        data: PERIODES.map(() => 0),
+        backgroundColor: PERIODES.map(() => 'rgba(160,160,160,0.2)'),
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      animation: { duration: 300 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: c => fmtNum(c.raw * 1e6) + ' M ha'
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color:'#a0aab8', font:{ family:'Source Sans 3', size:9, weight:'600' }, maxRotation: 30 },
+          grid: { color:'rgba(255,255,255,0.04)' }
+        },
+        y: {
+          ticks: { color:'#a0aab8', font:{ family:'Source Sans 3', size:9 }, callback: v => v.toFixed(1) },
+          grid: { color:'rgba(255,255,255,0.06)' }
+        }
+      }
+    }
+  };
+}
+
+function initCharts() {
+  chartSag = new Chart(document.getElementById('chartSag').getContext('2d'), makeChartConfig('Saguenay'));
+  chartQc  = new Chart(document.getElementById('chartQc').getContext('2d'),  makeChartConfig('Québec'));
+}
+
+function updateCharts() {
+  ['Saguenay','Québec'].forEach((region, ri) => {
+    const inst = ri === 0 ? chartSag : chartQc;
+    inst.data.datasets[0].data = PERIODES.map(p => {
+      const row = aggrData.find(r => r.Region === region && r.Periode === p);
+      return row ? (row.Superficie / 1e6) : 0;
+    });
+    inst.data.datasets[0].backgroundColor = PERIODES.map(p =>
+      p === currentPeriode ? 'rgba(139,0,0,0.82)' : 'rgba(160,160,160,0.2)'
+    );
+    inst.update();
+  });
+}
+
+// ── Carte ──
+function getStyle(bm) {
+  if (bm === 'satellite') return googleSatStyle();
+  return STYLE_URLS[bm];
+}
+
+function addBaseLayers() {
+  if (!geojsonProv) return;
+  if (!map.getSource('prov')) {
+    map.addSource('prov', { type:'geojson', data: geojsonProv });
+  }
+  if (!map.getLayer('prov-fill')) {
+    map.addLayer({ id:'prov-fill', type:'fill', source:'prov',
+      paint:{ 'fill-color':'#b0b0b0', 'fill-opacity': 0.35 }
+    });
+  }
+}
+
+async function loadPeriode(p) {
+  if (geoCache[p]) return geoCache[p];
+  const r = await fetch(`data/vec/feux_${p}.geojson`);
+  geoCache[p] = await r.json();
+  return geoCache[p];
+}
+
+async function updateFeuxLayer() {
+  const gj = await loadPeriode(currentPeriode);
+  if (map.getSource('feux')) {
+    map.getSource('feux').setData(gj);
+  } else {
+    map.addSource('feux', { type:'geojson', data: gj });
+    map.addLayer({ id:'feux-fill', type:'fill', source:'feux',
+      paint:{ 'fill-color':'#8B0000', 'fill-opacity': 0.75 }
+    });
+  }
+}
+
+function addAllLayers() {
+  addBaseLayers();
+  updateFeuxLayer();
+}
+
+function switchBasemap(bm) {
+  if (bm === currentBm) return;
+  currentBm = bm;
+  const center = map.getCenter(), zoom = map.getZoom();
+  map.setStyle(getStyle(bm));
+  map.once('styledata', () => { map.jumpTo({ center, zoom }); addAllLayers(); });
+}
+
+// ── Animation ──
+function startPlay() {
+  if (playTimer) return;
+  document.getElementById('btn-play').textContent = '⏹ Arrêter';
+  let idx = PERIODES.indexOf(currentPeriode);
+  playTimer = setInterval(() => {
+    idx = (idx + 1) % PERIODES.length;
+    setPeriode(idx);
+    if (idx === PERIODES.length - 1) stopPlay();
+  }, 1500);
+}
+function stopPlay() {
+  clearInterval(playTimer); playTimer = null;
+  document.getElementById('btn-play').textContent = '▶ Animer';
+}
+
+function setPeriode(idx) {
+  currentPeriode = PERIODES[idx];
+  document.getElementById('slider-periode').value = idx;
+  document.getElementById('periode-display').textContent = currentPeriode;
+  updateFeuxLayer();
+  updateCharts();
+}
+
+// ── Init ──
+async function initMap() {
+  setLoadingMsg('Chargement des données…');
+  const [provGJ, aggrJSON] = await Promise.all([
+    fetch('data/prov.geojson').then(r => r.json()),
+    fetch('data/table_aggr.json').then(r => r.json()),
+  ]);
+  geojsonProv = provGJ;
+  aggrData    = aggrJSON;
+
+  setLoadingMsg('Chargement de la première période…');
+  await loadPeriode(currentPeriode);
+
+  map = new maplibregl.Map({
+    container: 'map-container',
+    style: getStyle(currentBm),
+    bounds: BOUNDS,
+    fitBoundsOptions: { padding: 20 },
+    attributionControl: false,
+  });
+  map.addControl(new maplibregl.AttributionControl({ compact:true }), 'bottom-right');
+  map.addControl(new maplibregl.ScaleControl({ unit:'metric' }), 'bottom-left');
+  map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+
+  map.on('load', () => {
+    addAllLayers();
+    updateCharts();
+    document.getElementById('loading').classList.add('hidden');
+  });
+}
+
+// ── Listeners ──
+document.getElementById('slider-periode').addEventListener('input', e => {
+  stopPlay(); setPeriode(parseInt(e.target.value));
+});
+document.getElementById('btn-play').addEventListener('click', () => {
+  if (playTimer) stopPlay(); else startPlay();
+});
+document.querySelectorAll('.bm-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.bm-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active'); switchBasemap(btn.dataset.bm);
+  });
+});
+
+initCharts();
+initMap();
+</script>
+</body>
+</html>
