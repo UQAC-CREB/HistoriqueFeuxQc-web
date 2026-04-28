@@ -150,6 +150,24 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     #panel::-webkit-scrollbar { display: none; }
+    /* ── Resizer ── */
+    #resizer {
+      width: 6px; flex-shrink: 0;
+      background: var(--panel-border);
+      cursor: col-resize;
+      transition: background 0.15s;
+      position: relative; z-index: 5;
+    }
+    #resizer:hover, #resizer.dragging { background: #5b9bd5; }
+    #resizer::after {
+      content: '';
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 2px; height: 32px;
+      background: rgba(0,0,0,0.15);
+      border-radius: 2px;
+    }
+
   </style>
 </head>
 <body>
@@ -203,6 +221,7 @@
 
   </div>
 
+  <div id="resizer"></div>
   <div id="map">
     <div id="map-container"></div>
     <div id="basemap-switch">
@@ -406,6 +425,39 @@ document.querySelectorAll('.bm-btn').forEach(btn => {
 
 initCharts();
 initMap();
+// ── Resizable panel ──
+(function() {
+  const resizer = document.getElementById('resizer');
+  const panel   = document.getElementById('panel');
+  let dragging = false, startX = 0, startW = 0;
+
+  resizer.addEventListener('mousedown', (e) => {
+    dragging = true;
+    startX = e.clientX;
+    startW = panel.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const newW = Math.min(Math.max(startW + (e.clientX - startX), 200), window.innerWidth * 0.7);
+    panel.style.width = newW + 'px';
+    panel.style.minWidth = newW + 'px';
+    if (map) map.resize();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    if (map) map.resize();
+  });
+})();
+
 </script>
 </body>
 </html>
