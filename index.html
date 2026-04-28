@@ -43,6 +43,7 @@
 
     #app { display: flex; height: calc(100vh - 56px); }
 
+    /* ── PANEL — taille normale ── */
     #panel {
       width: 680px; min-width: 680px;
       background: var(--panel-bg);
@@ -125,6 +126,34 @@
     #panel::-webkit-scrollbar { width: 5px; }
     #panel::-webkit-scrollbar-track { background: transparent; }
     #panel::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+    /* ══════════════════════════════════════════
+       RESPONSIVE — iframe étroite (StoryMap)
+       ══════════════════════════════════════════ */
+    @media (max-width: 900px) {
+      #panel {
+        width: 280px; min-width: 280px;
+        padding: 12px 10px; gap: 10px;
+      }
+      .panel-label { font-size: 10px; letter-spacing: 1.2px; }
+      .periode-current { font-size: 16px; }
+      .periode-labels { font-size: 8px; }
+      #btn-play { font-size: 11px; padding: 6px 10px; }
+      .chart-box { padding: 8px; }
+      .chart-title { font-size: 10px; margin-bottom: 4px; }
+      #header h1 { font-size: 11px; letter-spacing: 0.8px; }
+      #header { height: 46px; padding: 0 12px; }
+      #app { height: calc(100vh - 46px); }
+    }
+
+    @media (max-width: 600px) {
+      #panel {
+        width: 220px; min-width: 220px;
+        padding: 8px; gap: 8px;
+      }
+      .periode-labels { display: none; }
+      .chart-title { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -222,7 +251,6 @@ function fmtNum(n) {
 }
 function setLoadingMsg(msg) { document.getElementById('loading-msg').textContent = msg; }
 
-// ── Charts ──
 function makeChartConfig() {
   return {
     type: 'bar',
@@ -270,7 +298,6 @@ function updateCharts() {
   });
 }
 
-// ── Carte ──
 function getStyle(bm) { return bm === 'satellite' ? googleSatStyle() : STYLE_URLS[bm]; }
 
 function addBaseLayers() {
